@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:13
+    volumes:
+      - /data/db:/var/lib/postgresql/data
+    env_file: ./server/.env
+  web:
+    build: ./server
+    env_file: ./server/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
