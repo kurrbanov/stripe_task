@@ -7,17 +7,27 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <title>{{ item.name }}</title>
 </head>
 <body>
 <h1>{{ item.name }}</h1>
 <h4>Цена: {{ item.price }}$</h4>
-<h6>Описание: </h6>
+<h6>Описание:</h6>
 <p>{{ item.description }}</p>
 
-<a role="button" class="btn btn-success" href="{% url 'main' %}">Купить</a>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-        crossorigin="anonymous"></script>
+<a role="button" class="btn btn-success" id="buy-button">Купить</a>
+<script type="text/javascript">
+    const stripe = Stripe('{{ STRIPE_PUBLIC }}');
+    let buyButton = document.getElementById('buy-button');
+    buyButton.addEventListener('click', function () {
+        fetch('{% url 'buy' item.id %}', {method: 'GET'})
+            .then(function (response) {
+                return response.json()
+            })
+            .then(session => stripe.redirectToCheckout({sessionId: session.id}))
+    });
+</script>
 </body>
 </html>
