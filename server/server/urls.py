@@ -16,6 +16,9 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from stripe_app.views import item_info
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('item/<int:pk>', item_info, name="item")
 ]
