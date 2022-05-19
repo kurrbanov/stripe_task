@@ -4,6 +4,11 @@ from django.http import HttpResponse
 from stripe_app.models import Item
 
 
+def main_page(request):
+    items = Item.objects.all()
+    return render(request, 'main.html', context={"items": items})
+
+
 def item_info(request, pk):
     try:
         item = Item.objects.get(id=pk)
