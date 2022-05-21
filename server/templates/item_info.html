@@ -17,7 +17,13 @@
 <h6>Описание:</h6>
 <p>{{ item.description }}</p>
 
-<a role="button" class="btn btn-success" id="buy-button">Купить</a>
+<button class="btn btn-success" id="buy-button">Купить</button>
+<form method="POST" action="{% url 'add-to-order' %}">
+    {% csrf_token %}
+    <input type="hidden" value="{{ item.id }}" name="item_id">
+    <button class="btn btn-primary" id="order-button" type="submit">Добавить в заказ</button>
+</form>
+<a role="button" class="btn btn-warning" href="{% url 'bucket' %}" id="bucket-button">Перейти в корзину ({{ order_cnt }})</a>
 <script type="text/javascript">
     const stripe = Stripe('{{ STRIPE_PUBLIC }}');
     let buyButton = document.getElementById('buy-button');

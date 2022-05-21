@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Заказы</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+{% if empty %}
+    <h1>Корзина пустая</h1>
+{% endif %}
+<h1>Список заказов:</h1>
+<ol>
+    <li>
+        {% for o_i in order_item %}
+            <h3>{{ o_i.item.name }}</h3>
+            <h4>{{ o_i.item.price }}$</h4>
+            <p>Количество: {{ o_i.quantity }}</p>
+        {% endfor %}
+    </li>
+</ol>
+<button class="btn btn-success" id="buy-button">Купить</button>
+<script type="text/javascript">
+    const stripe = Stripe('{{ STRIPE_PUBLIC }}');
+    let buyButton = document.getElementById('buy-button');
+    buyButton.addEventListener('click', function () {
+        fetch('{% url 'buy-bucket' %}', {method: 'GET'})
+            .then(function (response) {
+                return response.json()
+            })
+            .then(session => stripe.redirectToCheckout({sessionId: session.id}))
+    });
+</script>
+</body>
+</html>

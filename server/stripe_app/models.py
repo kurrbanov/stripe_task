@@ -8,3 +8,13 @@ class Item(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Order(models.Model):
+    uuid = models.UUIDField(unique=True)
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    item = models.ForeignKey(Item, on_delete=models.CASCADE)
+    quantity = models.IntegerField(default=1)
