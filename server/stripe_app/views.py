@@ -4,9 +4,9 @@ import stripe
 
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 
-from stripe_app.models import Item, Order, OrderItem
+from stripe_app.models import Item, Order, OrderItem, Discount, PromoCode
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -112,6 +112,9 @@ def show_bucket(request):
     try:
         order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
         order_item = OrderItem.objects.filter(order=order)
+    except MultipleObjectsReturned:
+        order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
+        order_item = OrderItem.objects.filter(order=order)
     except ObjectDoesNotExist:
         return render(request, 'orders.html', context={"empty": True})
 
@@ -127,6 +130,9 @@ def show_bucket(request):
 def create_checkout_session_to_order(request):
     try:
         order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
+        order_item = OrderItem.objects.filter(order=order)
+    except MultipleObjectsReturned:
+        order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
         order_item = OrderItem.objects.filter(order=order)
     except ObjectDoesNotExist:
         return HttpResponse("NOT FOUND")
@@ -145,9 +151,38 @@ def create_checkout_session_to_order(request):
             'quantity': o_i.quantity,
         })
 
+    for discount in Discount.objects.all():
+        if discount.duration == "forever" or discount.duration == "once":
+            discount.duration_in_months = None
+            discount.save()
+        if not discount.added_in_stripe:
+            stripe.Coupon.create(
+                id=str(discount.uuid),
+                percent_off=discount.percent_off,
+                duration=discount.duration,
+                duration_in_months=discount.duration_in_months
+            )
+            discount.added_in_stripe = True
+            discount.save()
+            order.discount.add(discount)
+            order.save()
+
+    for promo in PromoCode.objects.all():
+        if not promo.added_in_stripe:
+            try:
+                stripe.PromotionCode.create(
+                    coupon=str(promo.coupon.uuid),
+                    code=promo.code
+                )
+                promo.added_in_stripe = True
+                promo.save()
+            except stripe.error.InvalidRequestError:
+                continue
+
     session = stripe.checkout.Session.create(
         line_items=items,
         mode='payment',
+        allow_promotion_codes=True,
         success_url='http://localhost:8000/success',
         cancel_url='http://localhost:8000/cancel',
     )
