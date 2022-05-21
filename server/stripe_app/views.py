@@ -2,7 +2,7 @@ import os
 import uuid
 import stripe
 
-from django.shortcuts import render, redirect
+from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.core.exceptions import ObjectDoesNotExist
 
