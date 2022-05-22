@@ -4,7 +4,8 @@ import stripe
 
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldError
+from django.core.exceptions import FieldError
+from django.db import transaction, IntegrityError, DatabaseError
 
 from stripe_app.models import Item, Order, OrderItem, Discount, PromoCode, Tax
 
@@ -25,10 +26,10 @@ def cancel_page(request):
 
 
 def item_info(request, pk):
-    try:
-        item = Item.objects.get(id=pk)
-    except ObjectDoesNotExist:
+    item = Item.objects.filter(id=pk).first()
+    if item is None:
         return HttpResponse(f"<h1>Item with id={pk} not found</h1>")
+
     context = {
         "item": item,
         "STRIPE_PUBLIC": os.getenv("STRIPE_PUBLIC_KEY")
@@ -46,9 +47,8 @@ def item_info(request, pk):
 
 
 def create_checkout_session(request, pk):
-    try:
-        item = Item.objects.get(id=pk)
-    except ObjectDoesNotExist:
+    item = Item.objects.filter(id=pk).first()
+    if item is None:
         return HttpResponse(f"<h1>Item with id={pk} not found</h1>")
 
     session = stripe.checkout.Session.create(
@@ -81,16 +81,21 @@ def add_to_order(request):
                 request.session["order_id"] = str(order_uuid)
                 order = Order(uuid=order_uuid)
                 item = Item.objects.get(id=request.POST.get("item_id"))
-                order.save()
                 order_item = OrderItem(order=order, item=item)
-                order_item.save()
+                try:
+                    with transaction.atomic():
+                        order.save()
+                        order_item.save()
+                except (DatabaseError, IntegrityError, Exception) as e:
+                    raise e
             else:
                 item = Item.objects.get(id=request.POST.get("item_id"))
                 order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
                 try:
                     order_item = OrderItem.objects.get(order=order, item=item)
-                    order_item.quantity += 1
-                    order_item.save()
+                    with transaction.atomic():
+                        order_item.quantity += 1
+                        order_item.save()
                 except OrderItem.DoesNotExist:
                     order_item = OrderItem(order=order, item=item)
                     order_item.save()
@@ -109,13 +114,10 @@ def add_to_order(request):
 
 
 def show_bucket(request):
-    try:
-        order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
-        order_item = OrderItem.objects.filter(order=order)
-    except MultipleObjectsReturned:
-        order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
-        order_item = OrderItem.objects.filter(order=order)
-    except ObjectDoesNotExist:
+    order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
+    order_item = OrderItem.objects.filter(order=order)
+
+    if order is None or order_item is None:
         return render(request, 'orders.html', context={"empty": True})
 
     context = {
@@ -128,29 +130,28 @@ def show_bucket(request):
 
     if request.method == "POST":
         try:
-            order.jurisdiction = request.POST.get("country")
-            order.save()
-        except FieldError:
+            with transaction.atomic():
+                order.jurisdiction = request.POST.get("country")
+                order.save()
+        except (FieldError, DatabaseError, IntegrityError):
             pass
 
     return render(request, 'orders.html', context=context)
 
 
 def create_checkout_session_to_order(request):
-    try:
-        order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
-    except MultipleObjectsReturned:
-        order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
-    except ObjectDoesNotExist:
+    order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
+    if order is None:
         return HttpResponse("NOT FOUND")
 
     order_item = OrderItem.objects.filter(order=order)
 
-    coupons_id_list = [coupon.id for coupon in stripe.Coupon.list(limit=100)]
+    coupons_id_list = [coupon.id for coupon in stripe.Coupon.list()]
     for discount in Discount.objects.all():
         if discount.duration == "forever" or discount.duration == "once":
-            discount.duration_in_months = None
-            discount.save()
+            with transaction.atomic():
+                discount.duration_in_months = None
+                discount.save()
         if str(discount.uuid) not in coupons_id_list:
             stripe.Coupon.create(
                 id=str(discount.uuid),
@@ -158,13 +159,14 @@ def create_checkout_session_to_order(request):
                 duration=discount.duration,
                 duration_in_months=discount.duration_in_months
             )
-            order.discount.add(discount)
-            order.save()
+            with transaction.atomic():
+                order.discount.add(discount)
+                order.save()
 
-    promo_codes = [{promo.code: promo.id} for promo in stripe.PromotionCode.list(limit=100)]
+    promo_codes = [{promo.code: promo.id} for promo in stripe.PromotionCode.list()]
     for promo in PromoCode.objects.all():
         check_list = list(filter(lambda x: True if promo.code in x else False, promo_codes))
-        if True not in check_list:
+        if not check_list:
             stripe.PromotionCode.create(
                 coupon=str(promo.coupon.uuid),
                 code=promo.code
@@ -172,34 +174,27 @@ def create_checkout_session_to_order(request):
         else:
             stripe.PromotionCode.modify(check_list[0].get(promo.code), metadata={"coupon": promo.coupon.uuid})
 
-    taxes_name_jur = [{tax.display_name: (tax.jurisdiction, tax.percentage, tax.inclusive)} for tax in
-                      stripe.TaxRate.list(limit=100)]
     for tax in Tax.objects.all():
-        check_list = list(filter(lambda x: True if tax.display_name in x else False, taxes_name_jur))
-
-        # Check an existing taxes. Added in stripe only unique tax rates from db
-        if (not check_list) or (
-                check_list[0].get(tax.display_name) == (tax.jurisdiction, float(tax.percentage), tax.inclusive)):
-            new_tax = stripe.TaxRate.create(
-                display_name=tax.display_name,
-                jurisdiction=tax.jurisdiction,
-                percentage=tax.percentage,
-                inclusive=tax.inclusive
-            )
+        new_tax = stripe.TaxRate.create(
+            display_name=tax.display_name,
+            jurisdiction=tax.jurisdiction,
+            percentage=tax.percentage,
+            inclusive=tax.inclusive
+        )
+        with transaction.atomic():
             tax.tax_id = new_tax.id
             tax.save()
 
     items = []
-    try:
-        tax_order = Tax.objects.get(jurisdiction=order.jurisdiction)
-    except MultipleObjectsReturned:
-        tax_order = Tax.objects.filter(jurisdiction=order.jurisdiction).order_by("id").first()
-    except ObjectDoesNotExist:
+
+    tax_order = Tax.objects.filter(jurisdiction=order.jurisdiction).order_by("id").first()
+    if tax_order is None:
         return HttpResponse("NOT FOUND")
 
     for item in order_item:
-        item.tax = tax_order
-        item.save()
+        with transaction.atomic():
+            item.tax = tax_order
+            item.save()
 
         items.append({
             'price_data': {

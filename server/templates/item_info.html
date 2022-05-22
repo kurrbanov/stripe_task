@@ -29,8 +29,10 @@
     const stripe = Stripe('{{ STRIPE_PUBLIC }}');
     let buyButton = document.getElementById('buy-button');
     buyButton.removeAttribute('disabled');
+    buyButton.innerHTML = 'Купить';
     buyButton.addEventListener('click', function () {
         buyButton.setAttribute('disabled', '');
+        buyButton.innerHTML = 'Подождите, пожалуйста...';
         fetch('{% url 'buy' item.id %}', {method: 'GET'})
             .then(function (response) {
                 return response.json()

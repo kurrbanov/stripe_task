@@ -40,7 +40,9 @@
     const stripe = Stripe('{{ STRIPE_PUBLIC }}');
     let buyButton = document.getElementById('buy-button');
     buyButton.removeAttribute('disabled');
+    buyButton.innerHTML = 'Купить';
     buyButton.addEventListener('click', function () {
+        buyButton.innerHTML = 'Подождите, пожалуйста...';
         buyButton.setAttribute('disabled', '');
         fetch('{% url 'buy-bucket' %}', {method: 'GET'})
             .then(function (response) {
