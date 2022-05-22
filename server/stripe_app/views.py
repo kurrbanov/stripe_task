@@ -4,9 +4,9 @@ import stripe
 
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldError
 
-from stripe_app.models import Item, Order, OrderItem, Discount, PromoCode
+from stripe_app.models import Item, Order, OrderItem, Discount, PromoCode, Tax
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -120,9 +120,18 @@ def show_bucket(request):
 
     context = {
         "empty": False,
+        "countries": Tax.JURISDICTION,
         "order_item": order_item,
-        "STRIPE_PUBLIC": os.getenv("STRIPE_PUBLIC_KEY")
+        "STRIPE_PUBLIC": os.getenv("STRIPE_PUBLIC_KEY"),
+        "order": order
     }
+
+    if request.method == "POST":
+        try:
+            order.jurisdiction = request.POST.get("country")
+            order.save()
+        except FieldError:
+            pass
 
     return render(request, 'orders.html', context=context)
 
@@ -130,14 +139,69 @@ def show_bucket(request):
 def create_checkout_session_to_order(request):
     try:
         order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
-        order_item = OrderItem.objects.filter(order=order)
     except MultipleObjectsReturned:
         order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
-        order_item = OrderItem.objects.filter(order=order)
     except ObjectDoesNotExist:
         return HttpResponse("NOT FOUND")
 
+    order_item = OrderItem.objects.filter(order=order)
+
+    coupons_id_list = [coupon.id for coupon in stripe.Coupon.list()]
+    for discount in Discount.objects.all():
+        if discount.duration == "forever" or discount.duration == "once":
+            discount.duration_in_months = None
+            discount.save()
+        if str(discount.uuid) not in coupons_id_list:
+            try:
+                stripe.Coupon.create(
+                    id=str(discount.uuid),
+                    percent_off=discount.percent_off,
+                    duration=discount.duration,
+                    duration_in_months=discount.duration_in_months
+                )
+            except stripe.error.InvalidRequestError:
+                continue
+            order.discount.add(discount)
+            order.save()
+
+    promo_codes = [promo.code for promo in stripe.PromotionCode.list()]
+    for promo in PromoCode.objects.all():
+        try:
+            if promo.code not in promo_codes:
+                stripe.PromotionCode.create(
+                    coupon=str(promo.coupon.uuid),
+                    code=promo.code
+                )
+        except stripe.error.InvalidRequestError:
+            continue
+
+    taxes_name_jur = [{tax.display_name: (tax.jurisdiction, tax.percentage, tax.inclusive)} for tax in
+                      stripe.TaxRate.list()]
+    for tax in Tax.objects.all():
+        if (tax.display_name not in taxes_name_jur) or (
+                taxes_name_jur[tax.display_name] != (tax.jurisdiction, tax.percentage, tax.inclusive)):
+            new_tax = stripe.TaxRate.create(
+                display_name=tax.display_name,
+                jurisdiction=tax.jurisdiction,
+                percentage=tax.percentage,
+                inclusive=tax.inclusive
+            )
+            tax.tax_id = new_tax.id
+            tax.save()
+
     items = []
+    try:
+        tax_order = Tax.objects.get(jurisdiction=order.jurisdiction)
+    except MultipleObjectsReturned:
+        tax_order = Tax.objects.filter(jurisdiction=order.jurisdiction).order_by("id").first()
+    except ObjectDoesNotExist:
+        return HttpResponse("NOT FOUND")
+
+    try:
+        order.tax = tax_order
+        order.save()
+    except FieldError:
+        pass
 
     for o_i in order_item:
         items.append({
@@ -149,35 +213,8 @@ def create_checkout_session_to_order(request):
                 'unit_amount': o_i.item.price,
             },
             'quantity': o_i.quantity,
+            'tax_rates': [order.tax.tax_id]
         })
-
-    for discount in Discount.objects.all():
-        if discount.duration == "forever" or discount.duration == "once":
-            discount.duration_in_months = None
-            discount.save()
-        if not discount.added_in_stripe:
-            stripe.Coupon.create(
-                id=str(discount.uuid),
-                percent_off=discount.percent_off,
-                duration=discount.duration,
-                duration_in_months=discount.duration_in_months
-            )
-            discount.added_in_stripe = True
-            discount.save()
-            order.discount.add(discount)
-            order.save()
-
-    for promo in PromoCode.objects.all():
-        if not promo.added_in_stripe:
-            try:
-                stripe.PromotionCode.create(
-                    coupon=str(promo.coupon.uuid),
-                    code=promo.code
-                )
-                promo.added_in_stripe = True
-                promo.save()
-            except stripe.error.InvalidRequestError:
-                continue
 
     session = stripe.checkout.Session.create(
         line_items=items,

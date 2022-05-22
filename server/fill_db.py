@@ -1,5 +1,5 @@
 from uuid import uuid4
-from stripe_app.models import Item, Discount, PromoCode
+from stripe_app.models import Item, Discount, PromoCode, Tax
 
 from django.db.utils import IntegrityError
 
@@ -30,3 +30,9 @@ try:
     ])
 except IntegrityError:
     pass
+
+Tax.objects.bulk_create([
+    Tax(tax_id=str(uuid4()), display_name='VAT', jurisdiction='RU', percentage=20, inclusive=True),
+    Tax(tax_id=str(uuid4()), display_name='VAT', jurisdiction='US', percentage=7.25, inclusive=False),
+    Tax(tax_id=str(uuid4()), display_name='VAT', jurisdiction='DE', percentage=21, inclusive=False)
+])

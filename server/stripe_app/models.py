@@ -13,6 +13,8 @@ class Item(models.Model):
 class Order(models.Model):
     uuid = models.UUIDField(unique=True)
     discount = models.ManyToManyField('Discount', blank=True)
+    tax = models.ForeignKey('Tax', on_delete=models.SET_NULL, blank=True, null=True)
+    jurisdiction = models.CharField(max_length=2, default='RU')
 
     def __str__(self):
         return self.uuid
@@ -37,7 +39,6 @@ class Discount(models.Model):
     percent_off = models.IntegerField()
     duration = models.CharField(choices=DURATION, max_length=9)
     duration_in_months = models.IntegerField(default=1, null=True, blank=True)
-    added_in_stripe = models.BooleanField(default=False, editable=False)
 
     def __str__(self):
         return f"{self.percent_off}%"
@@ -46,7 +47,22 @@ class Discount(models.Model):
 class PromoCode(models.Model):
     code = models.CharField(max_length=255, unique=True)
     coupon = models.ForeignKey(Discount, on_delete=models.CASCADE)
-    added_in_stripe = models.BooleanField(default=False, editable=False)
 
     def __str__(self):
         return f"{self.code}"
+
+
+class Tax(models.Model):
+    JURISDICTION = (
+        ('US', 'US'),
+        ('DE', 'DE'),
+        ('RU', 'RU')
+    )
+    tax_id = models.CharField(max_length=255)
+    display_name = models.CharField(max_length=3)
+    jurisdiction = models.CharField(choices=JURISDICTION, max_length=2)
+    percentage = models.IntegerField()
+    inclusive = models.BooleanField()
+
+    def __str__(self):
+        return f"{self.jurisdiction} - {self.percentage}%"
