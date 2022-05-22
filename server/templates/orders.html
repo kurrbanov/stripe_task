@@ -17,7 +17,7 @@
         <li>
             {% for o_i in order_item %}
                 <h3>{{ o_i.item.name }}</h3>
-                <h4>{{ o_i.item.price }}$</h4>
+                <h4>{{ o_i.item.get_display_price }}$</h4>
                 <p>Количество: {{ o_i.quantity }}</p>
             {% endfor %}
         </li>
