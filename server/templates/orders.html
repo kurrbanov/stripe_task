@@ -39,6 +39,7 @@
 <script type="text/javascript">
     const stripe = Stripe('{{ STRIPE_PUBLIC }}');
     let buyButton = document.getElementById('buy-button');
+    buyButton.removeAttribute('disabled');
     buyButton.addEventListener('click', function () {
         buyButton.setAttribute('disabled', '');
         fetch('{% url 'buy-bucket' %}', {method: 'GET'})
@@ -46,7 +47,6 @@
                 return response.json()
             })
             .then(session => stripe.redirectToCheckout({sessionId: session.id}))
-        buyButton.removeAttribute('disabled');
     });
 </script>
 </body>
