@@ -4,8 +4,7 @@ import stripe
 
 from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from django.core.exceptions import FieldError
-from django.db import transaction, IntegrityError, DatabaseError
+from django.db import transaction
 
 from stripe_app.models import Item, Order, OrderItem, Discount, PromoCode, Tax
 
