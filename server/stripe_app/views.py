@@ -3,7 +3,7 @@ import uuid
 import stripe
 
 from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseNotAllowed, HttpResponseNotFound
 from django.db import transaction
 
 from stripe_app.models import Item, Order, OrderItem, Discount, PromoCode, Tax
@@ -27,7 +27,7 @@ def cancel_page(request):
 def item_info(request, pk):
     item = Item.objects.filter(id=pk).first()
     if item is None:
-        return HttpResponse("<h1>404 NOT FOUND</h1>")
+        return HttpResponseNotFound("<h1>404 NOT FOUND</h1>")
 
     context = {
         "item": item,
@@ -48,7 +48,7 @@ def item_info(request, pk):
 def create_checkout_session(request, pk):
     item = Item.objects.filter(id=pk).first()
     if item is None:
-        return HttpResponse("<h1>404 NOT FOUND</h1>")
+        return HttpResponseNotFound("<h1>404 NOT FOUND</h1>")
 
     session = stripe.checkout.Session.create(
         line_items=[{
@@ -106,8 +106,8 @@ def add_to_order(request):
             }
             return render(request, 'item_info.html', context=context)
         except Item.DoesNotExist:
-            return HttpResponse("<h1>404 NOT FOUND</h1>")
-    return HttpResponse("<h1>403 NOT ALLOWED</h1>")
+            return HttpResponseBadRequest("<h1>400 BAD REQUEST</h1>")
+    return HttpResponseNotAllowed("<h1>403 NOT ALLOWED</h1>")
 
 
 def show_bucket(request):
@@ -144,7 +144,7 @@ def create_checkout_session_to_order(request):
 
     order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
     if order is None:
-        return HttpResponse("<h1>404 NOT FOUND</h1>")
+        return HttpResponseBadRequest("<h1>400 BAD REQUEST</h1>")
 
     order_item = OrderItem.objects.filter(order=order)
 
@@ -191,7 +191,7 @@ def create_checkout_session_to_order(request):
 
     tax_order = Tax.objects.filter(jurisdiction=order.jurisdiction).order_by("id").first()
     if tax_order is None:
-        return HttpResponse("<h1>404 NOT FOUND</h1>")
+        return HttpResponseBadRequest("<h1>400 BAD REQUEST</h1>")
 
     for item in order_item:
         with transaction.atomic():
@@ -230,11 +230,11 @@ def clear_bucket(request):
 
         order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id")))
         if order is None:
-            return HttpResponse("<h1>404 NOT FOUND</h1>")
+            return HttpResponseBadRequest("<h1>400 BAD REQUEST</h1>")
 
         order_item = OrderItem.objects.filter(order=order.first())
         if order_item is not None:
             order_item.delete()
         return redirect('bucket')
 
-    return HttpResponse("<h1>403 NOT ALLOWED</h1>")
+    return HttpResponseNotAllowed("<h1>403 NOT ALLOWED</h1>")
