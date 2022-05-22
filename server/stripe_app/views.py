@@ -26,7 +26,6 @@ def cancel_page(request):
 
 
 def item_info(request, pk):
-    res = 1 / 0
     item = Item.objects.filter(id=pk).first()
     if item is None:
         return HttpResponse(f"<h1>Item with id={pk} not found</h1>")
