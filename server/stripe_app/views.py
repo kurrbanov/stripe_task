@@ -218,6 +218,8 @@ def create_checkout_session_to_order(request):
         cancel_url='http://localhost:8000/cancel',
     )
 
+    order_item.delete()
+
     return JsonResponse({
         'id': session.id
     })

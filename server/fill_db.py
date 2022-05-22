@@ -28,7 +28,7 @@ try:
         PromoCode(coupon=Discount.objects.get(uuid=uuid_d2), code='RANKS15'),
         PromoCode(coupon=Discount.objects.get(uuid=uuid_d2), code='STRIPE15'),
         PromoCode(coupon=Discount.objects.get(uuid=uuid_d2), code='APP15'),
-        PromoCode(coupon=Discount.objects.get(uuid=uuid_d1), code='RANKS')
+        PromoCode(coupon=Discount.objects.get(uuid=uuid_d3), code='RANKS')
     ])
 except IntegrityError:
     pass
