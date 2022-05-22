@@ -16,7 +16,6 @@ class Item(models.Model):
 class Order(models.Model):
     uuid = models.UUIDField(unique=True)
     discount = models.ManyToManyField('Discount', blank=True)
-    tax = models.ForeignKey('Tax', on_delete=models.SET_NULL, blank=True, null=True)
     jurisdiction = models.CharField(max_length=2, default='RU')
 
     def __str__(self):
@@ -27,6 +26,7 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     quantity = models.IntegerField(default=1)
+    tax = models.ForeignKey('Tax', on_delete=models.SET_NULL, blank=True, null=True)
 
     def __str__(self):
         return f"{self.order} - {self.item}"
@@ -61,10 +61,16 @@ class Tax(models.Model):
         ('DE', 'DE'),
         ('RU', 'RU')
     )
+
+    DISPLAY_NAME = (
+        ('sales_tax', 'sales_tax'),
+        ('vat', 'vat')
+    )
+
     tax_id = models.CharField(max_length=255)
-    display_name = models.CharField(max_length=3)
+    display_name = models.CharField(choices=DISPLAY_NAME, max_length=10)
     jurisdiction = models.CharField(choices=JURISDICTION, max_length=2)
-    percentage = models.IntegerField()
+    percentage = models.DecimalField(max_digits=5, decimal_places=2)
     inclusive = models.BooleanField()
 
     def __str__(self):

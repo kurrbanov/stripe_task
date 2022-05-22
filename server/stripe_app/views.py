@@ -146,40 +146,40 @@ def create_checkout_session_to_order(request):
 
     order_item = OrderItem.objects.filter(order=order)
 
-    coupons_id_list = [coupon.id for coupon in stripe.Coupon.list()]
+    coupons_id_list = [coupon.id for coupon in stripe.Coupon.list(limit=100)]
     for discount in Discount.objects.all():
         if discount.duration == "forever" or discount.duration == "once":
             discount.duration_in_months = None
             discount.save()
         if str(discount.uuid) not in coupons_id_list:
-            try:
-                stripe.Coupon.create(
-                    id=str(discount.uuid),
-                    percent_off=discount.percent_off,
-                    duration=discount.duration,
-                    duration_in_months=discount.duration_in_months
-                )
-            except stripe.error.InvalidRequestError:
-                continue
+            stripe.Coupon.create(
+                id=str(discount.uuid),
+                percent_off=discount.percent_off,
+                duration=discount.duration,
+                duration_in_months=discount.duration_in_months
+            )
             order.discount.add(discount)
             order.save()
 
-    promo_codes = [promo.code for promo in stripe.PromotionCode.list()]
+    promo_codes = [{promo.code: promo.id} for promo in stripe.PromotionCode.list(limit=100)]
     for promo in PromoCode.objects.all():
-        try:
-            if promo.code not in promo_codes:
-                stripe.PromotionCode.create(
-                    coupon=str(promo.coupon.uuid),
-                    code=promo.code
-                )
-        except stripe.error.InvalidRequestError:
-            continue
+        check_list = list(filter(lambda x: True if promo.code in x else False, promo_codes))
+        if True not in check_list:
+            stripe.PromotionCode.create(
+                coupon=str(promo.coupon.uuid),
+                code=promo.code
+            )
+        else:
+            stripe.PromotionCode.modify(check_list[0].get(promo.code), metadata={"coupon": promo.coupon.uuid})
 
     taxes_name_jur = [{tax.display_name: (tax.jurisdiction, tax.percentage, tax.inclusive)} for tax in
-                      stripe.TaxRate.list()]
+                      stripe.TaxRate.list(limit=100)]
     for tax in Tax.objects.all():
-        if (tax.display_name not in taxes_name_jur) or (
-                taxes_name_jur[tax.display_name] != (tax.jurisdiction, tax.percentage, tax.inclusive)):
+        check_list = list(filter(lambda x: True if tax.display_name in x else False, taxes_name_jur))
+
+        # Check an existing taxes. Added in stripe only unique tax rates from db
+        if (not check_list) or (
+                check_list[0].get(tax.display_name) == (tax.jurisdiction, float(tax.percentage), tax.inclusive)):
             new_tax = stripe.TaxRate.create(
                 display_name=tax.display_name,
                 jurisdiction=tax.jurisdiction,
@@ -197,23 +197,20 @@ def create_checkout_session_to_order(request):
     except ObjectDoesNotExist:
         return HttpResponse("NOT FOUND")
 
-    try:
-        order.tax = tax_order
-        order.save()
-    except FieldError:
-        pass
+    for item in order_item:
+        item.tax = tax_order
+        item.save()
 
-    for o_i in order_item:
         items.append({
             'price_data': {
                 'currency': 'usd',
                 'product_data': {
-                    'name': o_i.item.name,
+                    'name': item.item.name,
                 },
-                'unit_amount': o_i.item.price,
+                'unit_amount': item.item.price,
             },
-            'quantity': o_i.quantity,
-            'tax_rates': [order.tax.tax_id]
+            'quantity': item.quantity,
+            'tax_rates': [item.tax.tax_id]
         })
 
     session = stripe.checkout.Session.create(
