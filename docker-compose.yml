@@ -9,6 +9,8 @@ services:
   web:
     build: ./server
     env_file: ./server/.env
+    volumes:
+      - ./server/logs:/usr/src/logs/
     ports:
       - "8000:8000"
     depends_on:

@@ -26,6 +26,7 @@ def cancel_page(request):
 
 
 def item_info(request, pk):
+    res = 1 / 0
     item = Item.objects.filter(id=pk).first()
     if item is None:
         return HttpResponse(f"<h1>Item with id={pk} not found</h1>")
@@ -82,12 +83,9 @@ def add_to_order(request):
                 order = Order(uuid=order_uuid)
                 item = Item.objects.get(id=request.POST.get("item_id"))
                 order_item = OrderItem(order=order, item=item)
-                try:
-                    with transaction.atomic():
-                        order.save()
-                        order_item.save()
-                except (DatabaseError, IntegrityError, Exception) as e:
-                    raise e
+                with transaction.atomic():
+                    order.save()
+                    order_item.save()
             else:
                 item = Item.objects.get(id=request.POST.get("item_id"))
                 order = Order.objects.get(uuid=uuid.UUID(request.session.get("order_id")))
@@ -97,8 +95,9 @@ def add_to_order(request):
                         order_item.quantity += 1
                         order_item.save()
                 except OrderItem.DoesNotExist:
-                    order_item = OrderItem(order=order, item=item)
-                    order_item.save()
+                    with transaction.atomic():
+                        order_item = OrderItem(order=order, item=item)
+                        order_item.save()
             orders_to_cnt = 0
             for o_i in OrderItem.objects.filter(order=order):
                 orders_to_cnt += o_i.quantity
@@ -129,16 +128,13 @@ def show_bucket(request):
     }
 
     if request.method == "POST":
-        try:
-            with transaction.atomic():
-                order.jurisdiction = request.POST.get("country")
-                order.save()
-        except (FieldError, DatabaseError, IntegrityError):
-            pass
-
+        with transaction.atomic():
+            order.jurisdiction = request.POST.get("country")
+            order.save()
     return render(request, 'orders.html', context=context)
 
 
+@transaction.atomic
 def create_checkout_session_to_order(request):
     order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
     if order is None:
