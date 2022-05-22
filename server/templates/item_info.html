@@ -10,6 +10,11 @@
     <script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
     <script src="https://js.stripe.com/v3/"></script>
     <title>{{ item.name }}</title>
+    <style>
+        * {
+            margin: 10px;
+        }
+    </style>
 </head>
 <body>
 <h1>{{ item.name }}</h1>
@@ -17,7 +22,7 @@
 <h6>Описание:</h6>
 <p>{{ item.description }}</p>
 
-<button class="btn btn-success" id="buy-button">Купить</button>
+<button class="btn btn-success" id="buy-button">Купить один</button>
 <form method="POST" action="{% url 'add-to-order' %}">
     {% csrf_token %}
     <input type="hidden" value="{{ item.id }}" name="item_id">

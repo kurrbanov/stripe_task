@@ -2,7 +2,7 @@ import os
 import uuid
 import stripe
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.db import transaction
 
@@ -27,7 +27,7 @@ def cancel_page(request):
 def item_info(request, pk):
     item = Item.objects.filter(id=pk).first()
     if item is None:
-        return HttpResponse(f"<h1>Item with id={pk} not found</h1>")
+        return HttpResponse("<h1>404 NOT FOUND</h1>")
 
     context = {
         "item": item,
@@ -48,7 +48,7 @@ def item_info(request, pk):
 def create_checkout_session(request, pk):
     item = Item.objects.filter(id=pk).first()
     if item is None:
-        return HttpResponse(f"<h1>Item with id={pk} not found</h1>")
+        return HttpResponse("<h1>404 NOT FOUND</h1>")
 
     session = stripe.checkout.Session.create(
         line_items=[{
@@ -106,15 +106,20 @@ def add_to_order(request):
             }
             return render(request, 'item_info.html', context=context)
         except Item.DoesNotExist:
-            return HttpResponse("NOT FOUND")
-    return HttpResponse("NOT ALLOWED")
+            return HttpResponse("<h1>404 NOT FOUND</h1>")
+    return HttpResponse("<h1>403 NOT ALLOWED</h1>")
 
 
 def show_bucket(request):
-    order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
-    order_item = OrderItem.objects.filter(order=order)
+    if "order_id" not in request.session:
+        return render(request, 'orders.html', context={"empty": True})
 
-    if order is None or order_item is None:
+    order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
+    if order is None:
+        return render(request, 'orders.html', context={"empty": True})
+
+    order_item = OrderItem.objects.filter(order=order)
+    if order_item.first() is None:
         return render(request, 'orders.html', context={"empty": True})
 
     context = {
@@ -134,9 +139,12 @@ def show_bucket(request):
 
 @transaction.atomic
 def create_checkout_session_to_order(request):
+    if "order_id" not in request.session:
+        return render(request, 'orders.html', context={"empty": True})
+
     order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id"))).order_by("id").first()
     if order is None:
-        return HttpResponse("NOT FOUND")
+        return HttpResponse("<h1>404 NOT FOUND</h1>")
 
     order_item = OrderItem.objects.filter(order=order)
 
@@ -183,7 +191,7 @@ def create_checkout_session_to_order(request):
 
     tax_order = Tax.objects.filter(jurisdiction=order.jurisdiction).order_by("id").first()
     if tax_order is None:
-        return HttpResponse("NOT FOUND")
+        return HttpResponse("<h1>404 NOT FOUND</h1>")
 
     for item in order_item:
         with transaction.atomic():
@@ -213,3 +221,20 @@ def create_checkout_session_to_order(request):
     return JsonResponse({
         'id': session.id
     })
+
+
+def clear_bucket(request):
+    if request.method == "POST":
+        if "order_id" not in request.session:
+            return render(request, 'orders.html', context={"empty": True})
+
+        order = Order.objects.filter(uuid=uuid.UUID(request.session.get("order_id")))
+        if order is None:
+            return HttpResponse("<h1>404 NOT FOUND</h1>")
+
+        order_item = OrderItem.objects.filter(order=order.first())
+        if order_item is not None:
+            order_item.delete()
+        return redirect('bucket')
+
+    return HttpResponse("<h1>403 NOT ALLOWED</h1>")

@@ -7,6 +7,11 @@
           integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
     <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        * {
+            margin: 10px;
+        }
+    </style>
 </head>
 <body>
 {% if empty %}
@@ -34,7 +39,12 @@
         <button type="submit" class="btn btn-info">ОК</button>
     </form>
     <button class="btn btn-success" id="buy-button">Купить</button>
+    <form method="POST" action="{% url 'clear' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Очистить корзину</button>
+    </form>
 {% endif %}
+<a role="button" href="{% url 'main' %}">Вернуться назад</a>
 
 <script type="text/javascript">
     const stripe = Stripe('{{ STRIPE_PUBLIC }}');

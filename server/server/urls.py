@@ -3,7 +3,7 @@ from django.urls import path
 
 from stripe_app.views import (
     main_page, item_info, create_checkout_session, success_page, cancel_page,
-    add_to_order, show_bucket, create_checkout_session_to_order
+    add_to_order, show_bucket, create_checkout_session_to_order, clear_bucket
 )
 
 urlpatterns = [
@@ -15,5 +15,6 @@ urlpatterns = [
     path('bucket', show_bucket, name="bucket"),
     path('buy-bucket', create_checkout_session_to_order, name="buy-bucket"),
     path('success', success_page, name="success"),
-    path('cancel', cancel_page, name="cancel")
+    path('cancel', cancel_page, name="cancel"),
+    path('clear', clear_bucket, name="clear")
 ]

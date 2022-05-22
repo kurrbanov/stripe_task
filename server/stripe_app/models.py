@@ -12,6 +12,11 @@ class Item(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['id'])
+        ]
+
 
 class Order(models.Model):
     uuid = models.UUIDField(unique=True)
@@ -19,7 +24,12 @@ class Order(models.Model):
     jurisdiction = models.CharField(max_length=2, default='RU')
 
     def __str__(self):
-        return self.uuid
+        return str(self.uuid)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['uuid'])
+        ]
 
 
 class OrderItem(models.Model):
@@ -46,6 +56,11 @@ class Discount(models.Model):
     def __str__(self):
         return f"{self.percent_off}%"
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['uuid'])
+        ]
+
 
 class PromoCode(models.Model):
     code = models.CharField(max_length=255, unique=True)
@@ -53,6 +68,11 @@ class PromoCode(models.Model):
 
     def __str__(self):
         return f"{self.code}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['code'])
+        ]
 
 
 class Tax(models.Model):
@@ -75,3 +95,8 @@ class Tax(models.Model):
 
     def __str__(self):
         return f"{self.jurisdiction} - {self.percentage}%"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['jurisdiction', 'tax_id'])
+        ]
