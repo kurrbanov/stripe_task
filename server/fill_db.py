@@ -1,7 +1,9 @@
+import os
 from uuid import uuid4
 from stripe_app.models import Item, Discount, PromoCode, Tax
 
 from django.db.utils import IntegrityError
+from django.contrib.auth import get_user_model
 
 Item.objects.bulk_create([
     Item(name='iPhone X', description='Хороший смартфон', price=55000),
@@ -36,3 +38,9 @@ Tax.objects.bulk_create([
     Tax(tax_id=str(uuid4()), display_name='VAT', jurisdiction='US', percentage=7.25, inclusive=False),
     Tax(tax_id=str(uuid4()), display_name='VAT', jurisdiction='DE', percentage=21, inclusive=False)
 ])
+
+try:
+    get_user_model().objects.create_superuser(os.getenv("ADMIN_NAME"), os.getenv("ADMIN_EMAIL"),
+                                              os.getenv("ADMIN_PASSWORD"))
+except IntegrityError:
+    pass
